@@ -3,7 +3,7 @@
 """Patchpanel-Portplan als PDF.
 
 Installation: python -m pip install reportlab
-Start:        python patchpanel_portplan.py
+Start: python patchpanel_portplan.py
 """
 
 from datetime import datetime
@@ -17,7 +17,6 @@ from reportlab.lib.units import mm
 from reportlab.platypus import (
     Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle,
 )
-
 
 # =============================================================
 # EINSTELLUNGEN – hier manuell anpassen
@@ -34,33 +33,42 @@ ZEITSTEMPEL_IM_DATEINAMEN = True
 # Ausgabeordner neben dieser Python-Datei.
 AUSGABEORDNER = Path(__file__).resolve().parent / "output"
 
-# Format je Eintrag: (Port, Ziel, PoE, Bemerkung)
+# VLAN-Referenzliste: (VLAN-ID, Name)
+VLAN_REFERENZ = [
+    (1, "Default"),
+    (10, "Home"),
+    (20, "IoT"),
+    (30, "Guest"),
+    (40, "Camera"),
+]
+
+# Format je Eintrag: (Port, Ziel, VLAN, PoE, Bemerkung)
 # Die folgenden Belegungen sind Beispiele – bitte anpassen.
 PORTS = [
-    (1, "Flur", "Nein", ""),
-    (2, "", "", ""),
-    (3, "", "", ""),
-    (4, "", "", ""),
-    (5, "", "", ""),
-    (6, "", "", ""),
-    (7, "", "", ""),
-    (8, "", "", ""),
-    (9, "", "", ""),
-    (10, "", "", ""),
-    (11, "", "", ""),
-    (12, "", "", ""),
-    (13, "", "", ""),
-    (14, "", "", ""),
-    (15, "", "", ""),
-    (16, "", "", ""),
-    (17, "", "", ""),
-    (18, "", "", ""),
-    (19, "", "", ""),
-    (20, "", "", ""),
-    (21, "", "", ""),
-    (22, "", "", ""),
-    (23, "", "", ""),
-    (24, "", "", ""),
+    (1, "Flur 1", "1", "Ja", "Access Point - U7-Pro-XG"),
+    (2, "Flur 2", "", "", ""),
+    (3, "Wohnzimmer", "1", "Ja", "Access Point - U6+"),
+    (4, "Schlafzimmer", "", "", ""),
+    (5, "Büro", "1", "Ja", "Access Point - U7 In-Wall"),
+    (6, "", "", "", ""),
+    (7, "", "", "", ""),
+    (8, "", "", "", ""),
+    (9, "", "", "", ""),
+    (10, "", "", "", ""),
+    (11, "", "", "", ""),
+    (12, "", "", "", ""),
+    (13, "", "", "", ""),
+    (14, "", "", "", ""),
+    (15, "", "", "", ""),
+    (16, "", "", "", ""),
+    (17, "", "", "", ""),
+    (18, "", "", "", ""),
+    (19, "", "", "", ""),
+    (20, "", "", "", ""),
+    (21, "", "", "", ""),
+    (22, "", "", "", ""),
+    (23, "", "", "", ""),
+    (24, "", "", "", ""),
 ]
 
 
@@ -74,7 +82,9 @@ def erstelle_pdf(hochformat=True):
 
     AUSGABEORDNER.mkdir(parents=True, exist_ok=True)
     if ZEITSTEMPEL_IM_DATEINAMEN:
-        dateiname = erstellt_am.strftime("patchpanel_portplan_%Y-%m-%d_%H-%M-%S.pdf")
+        dateiname = erstellt_am.strftime(
+            "patchpanel_portplan_%Y-%m-%d_%H-%M-%S.pdf"
+        )
     else:
         dateiname = "patchpanel_portplan.pdf"
     pdf_datei = AUSGABEORDNER / dateiname
@@ -99,6 +109,10 @@ def erstelle_pdf(hochformat=True):
         "PortplanUntertitel", parent=styles["Normal"],
         fontSize=9, leading=12, textColor=colors.HexColor("#666666"),
     )
+    vlan_referenz_stil = ParagraphStyle(
+        "VlanReferenz", parent=styles["Normal"],
+        fontSize=9, leading=12,
+    )
     zellen_stil = ParagraphStyle(
         "PortplanZelle", parent=styles["Normal"],
         fontSize=9, leading=12,
@@ -120,19 +134,36 @@ def erstelle_pdf(hochformat=True):
         absatz(unterzeile, untertitel_stil),
         Spacer(1, 5 * mm),
     ]
-    daten = [[absatz(name, kopf_stil)
-              for name in ("Port", "Ziel", "PoE", "Bemerkung")]]
-    for port, ziel, poe, bemerkung in PORTS:
+
+    # VLAN-Referenzliste über der Porttabelle
+    if VLAN_REFERENZ:
+        vlan_text = "<br/>".join(
+            f"<b>VLAN {vlan_id}</b> – {escape(name)}"
+            for vlan_id, name in VLAN_REFERENZ
+        )
+        elemente.append(Paragraph(vlan_text, vlan_referenz_stil))
+        elemente.append(Spacer(1, 6 * mm))
+
+    daten = [[
+        absatz(name, kopf_stil)
+        for name in ("Port", "Ziel", "VLAN", "PoE", "Bemerkung")
+    ]]
+
+    for port, ziel, vlan, poe, bemerkung in PORTS:
         daten.append([
-            absatz(port, zellen_stil),
+            absatz(port, zentriert_stil),
             absatz(ziel, zellen_stil),
-            absatz(poe, zellen_stil),
+            absatz(vlan, zentriert_stil),
+            absatz(poe, zentriert_stil),
             absatz(bemerkung, zellen_stil),
         ])
 
     tabelle = Table(
         daten,
-        colWidths=[doc.width * anteil for anteil in (0.10, 0.35, 0.12, 0.43)],
+        colWidths=[
+            doc.width * anteil
+            for anteil in (0.09, 0.30, 0.09, 0.09, 0.43)
+        ],
         repeatRows=1,
         hAlign="LEFT",
     )

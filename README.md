@@ -1,10 +1,11 @@
 # Patchpanel-Portplan
 
-Python-Skript zum Erstellen eines übersichtlichen Patchpanel-Portplans als PDF. Die Anschlussbelegung wird direkt in der Python-Datei gepflegt.
+Python-Skript zum Erstellen eines übersichtlichen Patchpanel-Portplans als PDF. Die Anschlussbelegung und die VLAN-Referenzliste werden direkt in der Python-Datei gepflegt.
 
 ## Funktionen
 
-- Tabelle mit den Spalten **Port**, **Ziel**, **PoE** und **Bemerkung**.
+- VLAN-Referenzliste über der Porttabelle.
+- Tabelle mit den Spalten **Port**, **Ziel**, **VLAN**, **PoE** und **Bemerkung**.
 - A4-Hochformat als Standard, optional A4-Querformat.
 - Aktuelles lokales Datum und Uhrzeit in der PDF.
 - Optionaler Zeitstempel im Dateinamen.
@@ -36,7 +37,7 @@ py -m pip install reportlab
 ## Verwendung
 
 1. Öffne `patchpanel_portplan.py`.
-2. Passe die Einstellungen und die Liste `PORTS` an.
+2. Passe die Einstellungen, die VLAN-Referenzliste und die Liste `PORTS` an.
 3. Speichere die Datei und starte das Skript:
 
 ```bash
@@ -51,17 +52,44 @@ py patchpanel_portplan.py
 
 Die PDF wird im Unterordner `output` neben der Python-Datei gespeichert. Der Ordner wird bei Bedarf automatisch angelegt. Nach erfolgreicher Erstellung gibt das Skript den vollständigen Pfad zur PDF im Terminal aus.
 
-## Portbelegung konfigurieren
+## VLAN-Referenzliste konfigurieren
 
-Die Liste `PORTS` enthält pro Port einen Eintrag mit vier Werten:
+Die Liste `VLAN_REFERENZ` definiert die VLANs, die über der Porttabelle in der PDF angezeigt werden. Jeder Eintrag besteht aus der VLAN-ID und einem frei wählbaren Namen:
 
 ```python
-# (Port, Ziel, PoE, Bemerkung)
+# VLAN-Referenzliste: (VLAN-ID, Name)
+VLAN_REFERENZ = [
+    (1, "Default"),
+    (10, "Home"),
+    (20, "IoT"),
+    (30, "Guest"),
+    (40, "Camera"),
+]
+```
+
+In der PDF erscheint die Liste beispielsweise so:
+
+```text
+VLAN 1 – Default
+VLAN 10 – Home
+VLAN 20 – IoT
+VLAN 30 – Guest
+VLAN 40 – Camera
+```
+
+Die Reihenfolge in `VLAN_REFERENZ` bestimmt die Reihenfolge in der PDF. Wenn die Liste leer ist, wird keine VLAN-Referenzliste ausgegeben.
+
+## Portbelegung konfigurieren
+
+Die Liste `PORTS` enthält pro Port einen Eintrag mit fünf Werten:
+
+```python
+# (Port, Ziel, VLAN, PoE, Bemerkung)
 PORTS = [
-    (1, "Wohnzimmer", "Nein", "TV-Anschluss"),
-    (2, "Schlafzimmer", "Nein", ""),
-    (3, "Flur", "Ja", "Access Point"),
-    (4, "", "", ""),
+    (1, "Flur 1", "1", "Ja", "Access Point - U7-Pro-XG"),
+    (2, "Flur 2", "", "", ""),
+    (3, "Wohnzimmer", "1", "Ja", "Access Point - U6+"),
+    (4, "Schlafzimmer", "", "", ""),
 ]
 ```
 
@@ -69,17 +97,20 @@ PORTS = [
 | --- | --- | --- |
 | Port | Portnummer auf dem Patchpanel | `1` |
 | Ziel | Raum, Anschluss oder angeschlossenes Gerät | `"Wohnzimmer"` |
+| VLAN | VLAN-ID des Anschlusses | `"1"`, `"10"` oder `""` |
 | PoE | Manuell eingetragene PoE-Angabe | `"Ja"`, `"Nein"` oder `""` |
 | Bemerkung | Freitext für zusätzliche Informationen | `"Access Point"` |
 
-Die Reihenfolge der Einträge bestimmt die Reihenfolge in der PDF. Weitere Ports lassen sich durch zusätzliche Einträge ergänzen. Jeder Eintrag muss genau vier Werte enthalten.
+Die VLAN-Angabe kann als Text, etwa `"10"`, oder als Zahl, etwa `10`, eingetragen werden. Für nicht zugewiesene VLANs kann das Feld leer bleiben.
 
-Die mitgelieferten Belegungen sind Beispiele. Das Skript übernimmt die Angaben unverändert; es erkennt oder prüft keine Netzwerkverbindungen oder PoE-Versorgung.
+Die Reihenfolge der Einträge bestimmt die Reihenfolge in der PDF. Weitere Ports lassen sich durch zusätzliche Einträge ergänzen. Jeder Eintrag muss genau fünf Werte enthalten.
+
+Die mitgelieferten Belegungen sind Beispiele. Das Skript übernimmt die Angaben unverändert; es erkennt oder prüft keine Netzwerkverbindungen, VLAN-Zuordnungen oder PoE-Versorgung.
 
 Für einen manuellen Zeilenumbruch innerhalb einer Zelle verwende `\n`:
 
 ```python
-(5, "Arbeitszimmer", "Nein", "Doppeldose\nAnschluss links"),
+(5, "Büro", "1", "Ja", "Access Point - U7 In-Wall\nAnschluss links"),
 ```
 
 ## Einstellungen
