@@ -1,37 +1,46 @@
 # %%
 # -*- coding: utf-8 -*-
-"""Patchpanel-Portplan als PDF.
+"""Netzwerkschrank-Portplan als PDF.
+
+Enthält Patchpanel, Switch und UCG-Ultra auf separaten Seiten.
 
 Installation: python -m pip install reportlab
 Start: python patchpanel_portplan.py
 """
 
+
 from datetime import datetime
 from pathlib import Path
 from xml.sax.saxutils import escape
+
 
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4, landscape, portrait
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import mm
 from reportlab.platypus import (
-    Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle,
+    PageBreak, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle,
 )
+
 
 # =============================================================
 # EINSTELLUNGEN – hier manuell anpassen
 # =============================================================
-TITEL = "Netzwerkschrank – Patchpanel-Portplan"
+TITEL = "Netzwerkschrank – Portplan"
+
 
 # True: A4-Hochformat / False: A4-Querformat
 HOCHFORMAT = True
+
 
 # True: jede PDF mit Zeitstempel im Dateinamen speichern.
 # False: patchpanel_portplan.pdf bei jedem Lauf überschreiben.
 ZEITSTEMPEL_IM_DATEINAMEN = True
 
+
 # Ausgabeordner neben dieser Python-Datei.
 AUSGABEORDNER = Path(__file__).resolve().parent / "output"
+
 
 # VLAN-Referenzliste: (VLAN-ID, Name)
 VLAN_REFERENZ = [
@@ -42,14 +51,15 @@ VLAN_REFERENZ = [
     (40, "Camera"),
 ]
 
+
 # Format je Eintrag: (Port, Ziel, VLAN, PoE, Bemerkung)
 # Die folgenden Belegungen sind Beispiele – bitte anpassen.
-PORTS = [
-    (1, "Flur 1", "1", "Ja", "Access Point - U7-Pro-XG"),
-    (2, "Flur 2", "", "", ""),
+PORTS_PATCHFELD = [
+    (1, "Flur 1", "", "", "WAN"),
+    (2, "Büro", "1", "Ja", "Access Point - U7 In-Wall"),
     (3, "Wohnzimmer", "1", "Ja", "Access Point - U6+"),
-    (4, "Schlafzimmer", "", "", ""),
-    (5, "Büro", "1", "Ja", "Access Point - U7 In-Wall"),
+    (4, "Flur 2", "1", "Ja", "Access Point - U7-Pro-XG"),
+    (5, "Schlafzimmer", "", "", ""),
     (6, "", "", "", ""),
     (7, "", "", "", ""),
     (8, "", "", "", ""),
@@ -72,22 +82,50 @@ PORTS = [
 ]
 
 
-def erstelle_pdf(hochformat=True):
-    """Erstellt den Portplan; standardmäßig A4-Hochformat.
+# Format je Eintrag: (Port, Ziel, VLAN, PoE, Bemerkung)
+# Die folgenden Belegungen sind Beispiele – bitte anpassen.
+PORTS_SWITCH = [
+    (1, "Patchpanel Port 2\nBüro: Access Point - U7 In-Wall", "1", "Ja", ""),
+    (2, "Patchpanel Port 3\nWohnzimmer: Access Point - U6+", "1", "Ja", ""),
+    (3, "Patchpanel Port 4\nFlur: Access Point - U7-Pro-XG", "1", "Ja", ""),
+    (4, "", "", "Ja", ""),
+    (5, "Proxmox Host M720q", "1", "Nein", ""),
+    (6, "", "", "Nein", ""),
+    (7, "", "", "Nein", ""),
+    (8, "UCG-Ultra LAN out", "", "Nein", ""),
+]
 
+
+# Format je Eintrag: (Port, Ziel, VLAN, PoE, Bemerkung)
+# Die folgenden Belegungen sind Beispiele – bitte anpassen.
+PORTS_UCG_ULTRA = [
+    (1, "Switch Lite-8-PoE", "1", "Nein", ""),
+    (2, "", "", "", ""),
+    (3, "", "", "", ""),
+    (4, "", "", "", ""),
+    (5, "WAN", "", "Nein", "Uplink"),
+]
+
+def erstelle_pdf(hochformat=True):
+    """Erstellt Patchpanel-, Switch- und UCG-Ultra-Portplan in einer PDF.
+
+
+    Jeder Plan erhält eine eigene Seite.
     Gibt den Pfad zur erzeugten PDF zurück.
     """
     erstellt_am = datetime.now().astimezone()
     unterzeile = erstellt_am.strftime("Stand: %d.%m.%Y – %H:%M Uhr")
 
+
     AUSGABEORDNER.mkdir(parents=True, exist_ok=True)
     if ZEITSTEMPEL_IM_DATEINAMEN:
         dateiname = erstellt_am.strftime(
-            "patchpanel_portplan_%Y-%m-%d_%H-%M-%S.pdf"
+            "netzwerkschrank_portplan_%Y-%m-%d_%H-%M-%S.pdf"
         )
     else:
-        dateiname = "patchpanel_portplan.pdf"
+        dateiname = "netzwerkschrank_portplan.pdf"
     pdf_datei = AUSGABEORDNER / dateiname
+
 
     doc = SimpleDocTemplate(
         str(pdf_datei),
@@ -98,6 +136,7 @@ def erstelle_pdf(hochformat=True):
         bottomMargin=15 * mm,
         title=TITEL,
     )
+
 
     styles = getSampleStyleSheet()
     titel_stil = ParagraphStyle(
@@ -125,60 +164,91 @@ def erstelle_pdf(hochformat=True):
         fontName="Helvetica-Bold", textColor=colors.white,
     )
 
+
     def absatz(wert, stil):
         text = "" if wert is None else str(wert)
         return Paragraph(escape(text).replace("\n", "<br/>"), stil)
 
-    elemente = [
-        absatz(TITEL, titel_stil),
-        absatz(unterzeile, untertitel_stil),
-        Spacer(1, 5 * mm),
-    ]
 
-    # VLAN-Referenzliste über der Porttabelle
-    if VLAN_REFERENZ:
+    def vlan_referenz_elemente():
+        if not VLAN_REFERENZ:
+            return []
+
+
         vlan_text = "<br/>".join(
             f"<b>VLAN {vlan_id}</b> – {escape(name)}"
             for vlan_id, name in VLAN_REFERENZ
         )
-        elemente.append(Paragraph(vlan_text, vlan_referenz_stil))
-        elemente.append(Spacer(1, 6 * mm))
+        return [
+            Paragraph(vlan_text, vlan_referenz_stil),
+            Spacer(1, 6 * mm),
+        ]
 
-    daten = [[
-        absatz(name, kopf_stil)
-        for name in ("Port", "Ziel", "VLAN", "PoE", "Bemerkung")
-    ]]
 
-    for port, ziel, vlan, poe, bemerkung in PORTS:
-        daten.append([
-            absatz(port, zentriert_stil),
-            absatz(ziel, zellen_stil),
-            absatz(vlan, zentriert_stil),
-            absatz(poe, zentriert_stil),
-            absatz(bemerkung, zellen_stil),
-        ])
+    def portplan_elemente(ueberschrift, ports):
+        elemente = [
+            absatz(ueberschrift, titel_stil),
+            absatz(unterzeile, untertitel_stil),
+            Spacer(1, 5 * mm),
+        ]
 
-    tabelle = Table(
-        daten,
-        colWidths=[
-            doc.width * anteil
-            for anteil in (0.09, 0.30, 0.09, 0.09, 0.43)
-        ],
-        repeatRows=1,
-        hAlign="LEFT",
+
+        elemente.extend(vlan_referenz_elemente())
+
+
+        daten = [[
+            absatz(name, kopf_stil)
+            for name in ("Port", "Ziel", "VLAN", "PoE", "Bemerkung")
+        ]]
+
+
+        for port, ziel, vlan, poe, bemerkung in ports:
+            daten.append([
+                absatz(port, zentriert_stil),
+                absatz(ziel, zellen_stil),
+                absatz(vlan, zentriert_stil),
+                absatz(poe, zentriert_stil),
+                absatz(bemerkung, zellen_stil),
+            ])
+
+
+        tabelle = Table(
+            daten,
+            colWidths=[
+                doc.width * anteil
+                for anteil in (0.09, 0.30, 0.09, 0.09, 0.43)
+            ],
+            repeatRows=1,
+            hAlign="LEFT",
+        )
+        tabelle.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#1f4e79")),
+            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+            ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#b3bac3")),
+            ("ROWBACKGROUNDS", (0, 1), (-1, -1),
+             [colors.white, colors.HexColor("#f2f6fa")]),
+            ("LEFTPADDING", (0, 0), (-1, -1), 6),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+            ("TOPPADDING", (0, 0), (-1, -1), 5),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+        ]))
+        elemente.append(tabelle)
+        return elemente
+
+
+    elemente = []
+    elemente.extend(
+        portplan_elemente("Patchpanel-Portplan", PORTS_PATCHFELD)
     )
-    tabelle.setStyle(TableStyle([
-        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#1f4e79")),
-        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-        ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#b3bac3")),
-        ("ROWBACKGROUNDS", (0, 1), (-1, -1),
-         [colors.white, colors.HexColor("#f2f6fa")]),
-        ("LEFTPADDING", (0, 0), (-1, -1), 6),
-        ("RIGHTPADDING", (0, 0), (-1, -1), 6),
-        ("TOPPADDING", (0, 0), (-1, -1), 5),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
-    ]))
-    elemente.append(tabelle)
+    elemente.append(PageBreak())
+    elemente.extend(
+        portplan_elemente("Switch-Portplan Lite-8-PoE", PORTS_SWITCH)
+    )
+    elemente.append(PageBreak())
+    elemente.extend(
+        portplan_elemente("UCG-Ultra-Portplan", PORTS_UCG_ULTRA)
+    )
+
 
     def fusszeile(canvas, dokument):
         canvas.saveState()
@@ -191,9 +261,11 @@ def erstelle_pdf(hochformat=True):
         )
         canvas.restoreState()
 
+
     doc.build(elemente, onFirstPage=fusszeile, onLaterPages=fusszeile)
     print(f"PDF erstellt: {pdf_datei}")
     return pdf_datei
+
 
 
 if __name__ == "__main__":
